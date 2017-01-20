@@ -599,7 +599,6 @@ casper = (function () {
         obj._id = CasperUtils.getId();
         var idx = _records.push(obj);
         _indexes[obj._id] = idx - 1;
-        console.debug('indexes', _indexes);
         return obj;
       }
 
@@ -654,6 +653,10 @@ casper = (function () {
     this.find = function() {
       return ListQuery.from(_records);
     };
+    
+    this.findOne = function() {
+      return _self.find().limit(1);
+    };
 
     this.toList = function() {
       return _records;
@@ -700,6 +703,9 @@ casper = (function () {
     };
 
     this.find = function(repository, queryBuilder) {
+      if (!queryBuilder) {
+        return _database[repository].find();
+      }
       return ListQuery.from(_database[repository].toList()).setQuery(queryBuilder).execute();
     };
 
@@ -726,24 +732,3 @@ casper = (function () {
   };
   
 }());
-
-console.debug('casper', casper);
-
-/**
- * Testing it all out
- */
-var testList = [{
-  name: 'Dan',
-  magic: 25
-}, {
-  name: 'Chris',
-  magic: 30
-}, {
-  name: 'Aaron',
-  magic: 14
-}];
-
-var testObj = {
-  name: 'Tom',
-  magic: 21
-};

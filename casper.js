@@ -594,23 +594,33 @@ casper = (function () {
       _records = [],
       _indexes = {};
 
-    this.add = function(obj) {
+    this.save = function(obj) {
       if (!obj._id) {
         obj._id = CasperUtils.getId();
-        _records.push(obj);
-        console.debug('Inserted new with id', obj._id);
+        var idx = _records.push(obj);
+        _indexes[obj._id] = idx - 1;
+        console.debug('indexes', _indexes);
         return obj;
       }
 
-      for (var i = 0; i < _records.length; ++i) {
-        if (_records[i]._id === obj._id) {
-          console.debug('Updating existing');
-          _records[i] = obj;
-          break;
+      if (!_indexes[obj._id]) {
+        for (var i = 0; i < _records.length; ++i) {
+          if (_records[i]._id === obj._id) {
+            console.debug('Updating existing');
+            _records[i] = obj;
+            break;
+          }
         }
+      } else {
+        _records[_indexes[obj._id]] = obj;
       }
 
       return obj;
+    };
+    
+    // @deprecated - use save(obj)
+    this.add = function (obj) {
+      return _self.save(obj);
     };
 
     this.remove = function(obj) {
@@ -625,6 +635,24 @@ casper = (function () {
           break;
         }
       }
+    };
+    
+    this.findById = function(id) {
+      if (!_indexes[id]) {
+        for (var i = 0; i < _records.length; ++i) {
+          if (_records[i]._id === id) {
+            _indexes[id] = i;
+            return _records[i];
+          }
+        }
+        return null;
+      }
+      
+      return _records[_indexes[id]];
+    };
+    
+    this.find = function() {
+      return ListQuery.from(_records);
     };
 
     this.toList = function() {
@@ -644,8 +672,10 @@ casper = (function () {
       _database = {};
 
     this.createCollection = function(name) {
-      if (!_database[name])
+      if (!_database[name] && !_self[name]) {
         _database[name] = new CasperCollection();
+        _self[name] = _database[name];
+      }
     };
 
     this.getCollection = function(name) {
@@ -673,8 +703,11 @@ casper = (function () {
       return ListQuery.from(_database[repository].toList()).setQuery(queryBuilder).execute();
     };
 
-    this.findOne = function(repository, queryBuilder) {
-      return ListQuery.from(_database[repository].toList()).setQuery(queryBuilder).limit(1).execute();
+    this.findOne = function(repository, query) {
+      if (typeof query === 'string') {
+        return _database[repository].findById(query);
+      }
+      return ListQuery.from(_database[repository].toList()).setQuery(query).limit(1).execute();
     };
 
     this.count = function(repository) {
@@ -693,3 +726,24 @@ casper = (function () {
   };
   
 }());
+
+console.debug('casper', casper);
+
+/**
+ * Testing it all out
+ */
+var testList = [{
+  name: 'Dan',
+  magic: 25
+}, {
+  name: 'Chris',
+  magic: 30
+}, {
+  name: 'Aaron',
+  magic: 14
+}];
+
+var testObj = {
+  name: 'Tom',
+  magic: 21
+};

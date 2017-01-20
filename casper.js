@@ -612,7 +612,6 @@ casper = (function () {
       if (!_indexes[obj._id]) {
         for (var i = 0; i < _records.length; ++i) {
           if (_records[i]._id === obj._id) {
-            console.debug('Updating existing');
             _records[i] = obj;
             break;
           }
@@ -631,7 +630,6 @@ casper = (function () {
 
     this.remove = function(obj) {
       if (!obj._id) {
-        console.debug('No such record');
         return false;
       }
 

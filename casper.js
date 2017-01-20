@@ -593,6 +593,13 @@ casper = (function () {
     var _self = this,
       _records = [],
       _indexes = {};
+    
+    this.rebuildIndexes = function () {
+      _indexes = {};
+      for (var i = 0; i < _records.length) {
+        _indexes[_records[i]._id] = i;
+      }
+    };
 
     this.save = function(obj) {
       if (!obj._id) {

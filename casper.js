@@ -1,3 +1,49 @@
+/**
+ * This is a polyfill to add the ES6 assign functionality
+ * if it is needed. I did not write this.
+ */
+if (!Object.assign) {
+  Object.defineProperty(Object, 'assign', {
+    enumerable: false,
+    configurable: true,
+    writable: true,
+    value: function(target) {
+      'use strict';
+      if (target === undefined || target === null) {
+        throw new TypeError('Cannot convert first argument to object');
+      }
+
+      var to = Object(target);
+      for (var i = 1; i < arguments.length; i++) {
+        var nextSource = arguments[i];
+        if (nextSource === undefined || nextSource === null) {
+          continue;
+        }
+        nextSource = Object(nextSource);
+
+        var keysArray = Object.keys(nextSource);
+        for (var nextIndex = 0, len = keysArray.length; nextIndex < len; nextIndex++) {
+          var nextKey = keysArray[nextIndex];
+          var desc = Object.getOwnPropertyDescriptor(nextSource, nextKey);
+          if (desc !== undefined && desc.enumerable) {
+            to[nextKey] = nextSource[nextKey];
+          }
+        }
+      }
+      return to;
+    }
+  });
+}
+
+/**
+ * JavaScript port of CasperDB
+ * This port includes everything (plus some) from the Java version
+ * except for the Java/Spring specific features such as repositories
+ * and method interception.
+ * --
+ * I am planning to backport the new features from this to the Java
+ * build.
+ */
 var casper = casper || {};
 
 casper = (function () {
@@ -47,6 +93,21 @@ casper = (function () {
       for (var i = 0; i < 32; ++i)
         result += chars[Math.floor(Math.random() * chars.length)];
       return result;
+    },
+    
+    getHash: function(str) {
+      var hash = 0, c;
+      
+      if (str.length === 0) {
+        return hash;
+      }
+      
+      for (var i = 0; i < str.length; ++i) {
+        c = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + c;
+        hash |= 0;
+      }
+      return hash;
     }
 
   };
@@ -55,9 +116,7 @@ casper = (function () {
    * ObjectMatcher class
    */
   var ObjectMatcher = (function() {
-    function _ObjectMatcher() {
-
-    }
+    function _ObjectMatcher() {}
 
     var ObjectMatcher = function(obj) {
       var _self = this;
@@ -589,38 +648,143 @@ casper = (function () {
   /**
    * CasperCollection class
    */
-  var CasperCollection = function() {
+  var CasperCollection = function(options) {
     var _self = this,
       _records = [],
-      _indexes = {};
+      _indexes = {
+        id: {},
+        unique: {}
+      },
+      _constraints = {
+        unique: [],
+        min: {},
+        max: {}
+      };
+    
+    if (options) {
+      if (options.constraints) {
+        for (var c in options.constraints) {
+          if (!options.constraints.hasOwnProperty(c))
+            continue;
+          _addConstraint(c, options.constraints[c]);
+        }
+      }
+    }
+    
+    this.getIndexes = function () {
+      return _indexes;
+    };
+    
+    this.getConstraints = function () {
+      return _constraints;
+    };
     
     this.rebuildIndexes = function () {
-      _indexes = {};
-      for (var i = 0; i < _records.length) {
-        _indexes[_records[i]._id] = i;
+      _indexes = {id: {}, unique: {}};
+      var hash, u;
+      for (var i = 0; i < _records.length; ++i) {
+        _indexes.id[_records[i]._id] = i;
+        for (u of _constraints.unique) {
+          if (_records[i][u]) {
+            hash = typeof _records[i][u] === 'string' ? CasperUtils.getHash(_records[i][u]) : _records[i][u];
+            _indexes.unique[hash] = i;
+          }
+        }
       }
     };
+    
+    function _addConstraint(field, constraint) {
+      if (constraint.unique) {
+        if (_constraints.unique.indexOf(field) < 0)
+          _constraints.unique.push(field);
+      }
+      
+      if (constraint.min) {
+        _constraints.min[field] = constraint.min;
+      }
+      
+      if (constraint.max) {
+        _constraints.max[field] = constraint.max;
+      }
+    }
+    
+    this.addConstraint = function (field, constraint) {
+      _addConstraint(field, constraint);
+    };
 
+    function _checkConstraints(obj) {
+      var field, hash, v;
+      for (field of _constraints.unique) {
+        if (obj[field]) {
+          hash = typeof obj[field] === 'string' ? CasperUtils.getHash(obj[field]) : obj[field];
+          if (_indexes.unique[hash] !== undefined) {
+            return false;
+          }
+        }
+      }
+      
+      for (field in _constraints.min) {
+        if (!_constraints.min.hasOwnProperty(field) || !obj.hasOwnProperty(field))
+          continue;
+        
+        v = typeof obj[field] === 'string' ? obj[field].length : obj[field];
+        if (v < _constraints.min[field]) {
+          return false;
+        }
+      }
+      
+      for (field in _constraints.max) {
+        if (!_constraints.min.hasOwnProperty(field) || !obj.hasOwnProperty(field))
+          continue;
+        v = typeof obj[field] === 'string' ? obj[field].length : obj[field];
+        if (v > _constraints.max[field]) {
+          return false;
+        }
+      }
+      
+      return true;
+    }
+    
+    function _createIndexes(obj, idx) {
+      var field, hash;
+      _indexes.id[obj._id] = idx;
+      for (field of _constraints.unique) {
+        if (obj[field]) {
+          hash = typeof obj[field] === 'string' ? CasperUtils.getHash(obj[field]) : obj[field];
+          _indexes.unique[hash] = idx;
+        }
+      }
+    }
+    
     this.save = function(obj) {
-      if (!obj._id) {
-        obj._id = CasperUtils.getId();
-        var idx = _records.push(obj);
-        _indexes[obj._id] = idx - 1;
-        return obj;
+      var o = Object.assign({}, obj);
+      
+      if (!_checkConstraints(o))
+          return false;
+      
+      if (!o._id) {
+        o._id = CasperUtils.getId();
+        var idx = _records.push(o) - 1;
+        _createIndexes(o, idx);
+        return o;
       }
 
-      if (!_indexes[obj._id]) {
+      // TODO we are updating a record here, we need to make sure to clean the unique indexes...
+      
+      if (!_indexes.id[o._id]) {
         for (var i = 0; i < _records.length; ++i) {
-          if (_records[i]._id === obj._id) {
-            _records[i] = obj;
+          if (_records[i]._id === o._id) {
+            _records[i] = o;
+            _createIndexes(o, i - 1);
             break;
           }
         }
       } else {
-        _records[_indexes[obj._id]] = obj;
+        _records[_indexes.id[o._id]] = o;
+        _createIndexes(o, _indexes.id[o._id]);
       }
 
-      return obj;
+      return o;
     };
     
     // @deprecated - use save(obj)
@@ -636,23 +800,25 @@ casper = (function () {
       for (var i = 0; i < _records.length; ++i) {
         if (_records[i]._id === obj._id) {
           _records.splice(i, 1);
+          delete _indexes.id[obj._id];
+          // TODO delete unique indexes          
           break;
         }
       }
     };
     
     this.findById = function(id) {
-      if (!_indexes[id]) {
+      if (!_indexes.id[id]) {
         for (var i = 0; i < _records.length; ++i) {
           if (_records[i]._id === id) {
-            _indexes[id] = i;
+            _indexes.id[id] = i;
             return _records[i];
           }
         }
         return null;
       }
       
-      return _records[_indexes[id]];
+      return _records[_indexes.id[id]];
     };
     
     this.find = function() {
@@ -679,9 +845,9 @@ casper = (function () {
     var _self = this,
       _database = {};
 
-    this.createCollection = function(name) {
+    this.createCollection = function(name, options) {
       if (!_database[name] && !_self[name]) {
-        _database[name] = new CasperCollection();
+        _database[name] = new CasperCollection(options);
         _self[name] = _database[name];
       }
     };
@@ -693,6 +859,10 @@ casper = (function () {
     this.dropCollection = function(name) {
       if (_database[name])
         delete _database[name];
+    };
+    
+    this.addConstraint = function (name, field, constraint) {
+      _database[name].addConstraint(field, constraint);
     };
 
     this.save = function(repository, obj) {

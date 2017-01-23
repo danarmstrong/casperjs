@@ -38,6 +38,7 @@ o = db.people.findById(id);
 If you would like to query
 ```javascript
 o = db.people.findOne().where('name').eq('Bob').and('age').gt(30).execute();
+l = db.people.find().where('name').like('%ob').execute();
 ```
 
 As you can see, the querying is very SQL-inspired. It supports most of the operations you can find in MySQL.

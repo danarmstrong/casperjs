@@ -42,6 +42,14 @@ l = db.people.find().where('name').like('%ob').execute();
 ```
 
 As you can see, the querying is very SQL-inspired. It supports most of the operations you can find in MySQL.
+ * eq - Equal
+ * ne - Not equal
+ * lt - Less-than
+ * gt - Greater-than
+ * lg - Less-than or Greater-than (Not equal)
+ * like - Uses % as a wildcard
+ * between - Checks if a numeric value is between two values
+ * in - Checks if the value exists in an array of values
 
 ## Removing records
 ```javascript

@@ -789,7 +789,7 @@ casper = (function () {
       _triggers[event][name] = fn;
     }
     
-    function _removeTrigger(event, name) {
+    function _dropTrigger(event, name) {
       delete _triggers[event][name];
     }
     
@@ -805,7 +805,7 @@ casper = (function () {
       _procedures[name] = fn;
     }
     
-    function _removeProcedure(name) {
+    function _dropProcedure(name) {
       delete _procedures[name];
     }
     
@@ -824,16 +824,16 @@ casper = (function () {
       _addTrigger(event, name, fn);
     };
     
-    this.removeTrigger = function (event, name) {
-      _removeTrigger(event, name);
+    this.dropTrigger = function (event, name) {
+      _dropTrigger(event, name);
     };
     
     this.addProcedure = function (name, fn) {
       _addProcedure(name, fn);
     };
     
-    this.removeProcedure = function (name) {
-      _removeProcedure(name);
+    this.dropProcedure = function (name) {
+      _dropProcedure(name);
     };
     
     this.callProcedure = function (name) {

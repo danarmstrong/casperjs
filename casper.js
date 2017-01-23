@@ -1,6 +1,18 @@
 /**
- * This is a polyfill to add the ES6 assign functionality
- * if it is needed. I did not write this.
+ * This is a polyfill to add the ES6 Object.assign functionality
+ * to older browsers.
+ * --
+ * Object.assign allows us to clone objects without including a
+ * third-party library like Underscore or jQuery.
+ *
+ * Cloning prevents our source object from being modified
+ * when we save and generate ids. The desired behavior is for
+ * a new object reflecting our saved instance being returned
+ * from a collection.save() rather than the original object
+ * being updated as this may cause confusion to those not
+ * familiar with the JavaScript pass-by-reference behavior.
+ *
+ * Disclaimer: I did not write this Polyfill.
  */
 if (!Object.assign) {
   Object.defineProperty(Object, 'assign', {
@@ -657,9 +669,23 @@ casper = (function () {
       },
       _constraints = {
         unique: [],
+        required: [],
+        notNull: [],
         min: {},
-        max: {}
-      };
+        max: {},
+        defaultsTo: {},
+        pattern: {},
+        type: {}
+      },
+      _triggers = {
+        beforeCreate: {},
+        afterCreate: {},
+        beforeUpdate: {},
+        afterUpdate: {},
+        beforeDelete: {},
+        afterDelete: {}
+      },
+      _procedures = {};
     
     if (options) {
       if (options.constraints) {
@@ -668,6 +694,25 @@ casper = (function () {
             continue;
           _addConstraint(c, options.constraints[c]);
         }
+      }
+      
+      if (options.triggers) {
+        if (options.triggers.beforeCreate)
+          _triggers.beforeCreate = options.triggers.beforeCreate;
+        if (options.triggers.afterCreate)
+          _triggers.afterCreate = options.triggers.afterCreate;
+        if (options.triggers.beforeUpdate)
+          _triggers.beforeUpdate = options.triggers.beforeUpdate;
+        if (options.triggers.afterUpdate)
+          _triggers.afterUpdate = options.triggers.afterUpdate;
+        if (options.triggers.beforeDelete)
+          _triggers.beforeDelete = options.triggers.beforeDelete;
+        if (options.triggers.afterDelete)
+          _triggers.afterDelete = options.triggers.afterDelete;
+      }
+      
+      if (options.procedures) {
+        _procedures = options.procedures;
       }
     }
     
@@ -685,18 +730,38 @@ casper = (function () {
       for (var i = 0; i < _records.length; ++i) {
         _indexes.id[_records[i]._id] = i;
         for (u of _constraints.unique) {
+          _indexes.unique[u] = {};
           if (_records[i][u]) {
             hash = typeof _records[i][u] === 'string' ? CasperUtils.getHash(_records[i][u]) : _records[i][u];
-            _indexes.unique[hash] = i;
+            _indexes.unique[u][hash] = _records[i]._id;
           }
         }
       }
     };
     
+    /**
+     * Adds a constraint definition to the collection.
+     * This method is local/private so that it is accessible to
+     * the constructor.
+     */
     function _addConstraint(field, constraint) {
       if (constraint.unique) {
-        if (_constraints.unique.indexOf(field) < 0)
+        if (_constraints.unique.indexOf(field) < 0) {
           _constraints.unique.push(field);
+          _indexes.unique[field] = {};
+        }
+      }
+      
+      if (constraint.required) {
+        if (_constraints.required.indexOf(field) < 0) {
+          _constraints.required.push(field);
+        }
+      }
+      
+      if (constraint.notNull) {
+        if (_constraints.notNull.indexOf(field) < 0) {
+          _constraints.notNull.push(field);
+        }
       }
       
       if (constraint.min) {
@@ -706,23 +771,167 @@ casper = (function () {
       if (constraint.max) {
         _constraints.max[field] = constraint.max;
       }
+      
+      if (constraint.defaultsTo) {
+        _constraints.defaultsTo[field] = constraint.defaultsTo;
+      }
+      
+      if (constraint.pattern) {
+        _constraints.pattern[field] = constraint.pattern;
+      }
+      
+      if (constraint.type) {
+        _constraints.type[field] = constraint.type;
+      }
     }
     
+    function _addTrigger(event, name, fn) {
+      _triggers[event][name] = fn;
+    }
+    
+    function _removeTrigger(event, name) {
+      delete _triggers[event][name];
+    }
+    
+    function _runTriggers(event, obj) {
+      if (_triggers[event] === undefined)
+        return false;
+      for (var t in _triggers[event]) {
+        _triggers[event][t] && _triggers[event][t](obj);
+      }
+    }
+    
+    function _addProcedure(name, fn) {
+      _procedures[name] = fn;
+    }
+    
+    function _removeProcedure(name) {
+      delete _procedures[name];
+    }
+    
+    function _callProcedure(name) {
+      _procedures[name] && _procedures[name]();
+    }
+    
+    /**
+     * Exposes _addConstraint publically
+     */
     this.addConstraint = function (field, constraint) {
       _addConstraint(field, constraint);
     };
+    
+    this.addTrigger = function (event, name, fn) {
+      _addTrigger(event, name, fn);
+    };
+    
+    this.removeTrigger = function (event, name) {
+      _removeTrigger(event, name);
+    };
+    
+    this.addProcedure = function (name, fn) {
+      _addProcedure(name, fn);
+    };
+    
+    this.removeProcedure = function (name) {
+      _removeProcedure(name);
+    };
+    
+    this.callProcedure = function (name) {
+      _callProcedure(name);
+    };
+    
+    /**
+     * When we update a record, we need to update
+     * any unique indexes accordingly.
+     */
+    function _updateUniqueIndexes(obj) {
+      var f, h, hash;
+      for (f in obj) {
+        if (!obj.hasOwnProperty(f))
+          continue;
+        if (_indexes.unique[f]) {
+          hash = CasperUtils.getHash(obj[f]);
+          if (_indexes.unique[f][hash]) {
+            // TODO Should we check the id just in case?
+            continue;
+          }
+          
+          for (h in _indexes.unique[f]) {
+            if (!_indexes.unique[f].hasOwnProperty(h))
+              continue;
+            if (_indexes.unique[f][h] === obj._id) {
+              delete _indexes.unique[f][h];
+              break;
+            }
+          }
+          _indexes.unique[f][hash] = obj._id;
+        }
+      }
+    }
 
+    /**
+     * This method is called when a record is saved.
+     * This will validate the record against all of the
+     * defined constraints.
+     */
     function _checkConstraints(obj) {
-      var field, hash, v;
-      for (field of _constraints.unique) {
-        if (obj[field]) {
-          hash = typeof obj[field] === 'string' ? CasperUtils.getHash(obj[field]) : obj[field];
-          if (_indexes.unique[hash] !== undefined) {
+      var field, hash, v, r;
+      
+      /**
+       * Set any default values
+       * If there is already a value for the field, it is skipped
+       */
+      for (field in _constraints.defaultsTo) {
+        if (obj[field] === undefined) {
+          obj[field] = _constraints.defaultsTo[field];
+        }
+      }
+      
+      /**
+       * Check the type of the field
+       */
+      for (field in _constraints.type) {
+        if (obj[field] !== undefined && obj[field] !== null) {
+          if (typeof obj[field] !== _constraints.type[field]) {
             return false;
           }
         }
       }
       
+      /**
+       * Make sure all required fields are present
+       */
+      for (field of _constraints.required) {
+        if (obj[field] === undefined) {
+          return false;
+        }
+      }
+      
+      /**
+       * Check all notNull values
+       */
+      for (field of _constraints.notNull) {
+        if (obj[field] !== undefined && obj[field] === null) {
+          return false;
+        } 
+      }
+      
+      /**
+       * Validate unique values
+       */
+      for (field of _constraints.unique) {
+        if (obj[field]) {
+          hash = typeof obj[field] === 'string' ? CasperUtils.getHash(obj[field]) : obj[field];
+          if (_indexes.unique[field][hash] !== undefined && _indexes.unique[field][hash] !== obj._id) {
+            return false;
+          }
+        }
+      }
+      
+      /**
+       * Validate max value
+       * For strings this is the length, for numbers it is the actual value
+       */
       for (field in _constraints.min) {
         if (!_constraints.min.hasOwnProperty(field) || !obj.hasOwnProperty(field))
           continue;
@@ -733,12 +942,28 @@ casper = (function () {
         }
       }
       
+      /**
+       * Validate max value
+       * For strings this is the length, for numbers it is the actual value
+       */
       for (field in _constraints.max) {
         if (!_constraints.min.hasOwnProperty(field) || !obj.hasOwnProperty(field))
           continue;
         v = typeof obj[field] === 'string' ? obj[field].length : obj[field];
         if (v > _constraints.max[field]) {
           return false;
+        }
+      }
+      
+      /**
+       * Validate regex patterns
+       */
+      for (field in _constraints.pattern) {
+        if (obj[field]) {
+          r = new RegExp(_constraints.pattern[field]);
+          if (!obj[field].match(r)) {
+            return false;
+          }
         }
       }
       
@@ -751,39 +976,32 @@ casper = (function () {
       for (field of _constraints.unique) {
         if (obj[field]) {
           hash = typeof obj[field] === 'string' ? CasperUtils.getHash(obj[field]) : obj[field];
-          _indexes.unique[hash] = idx;
+          _indexes.unique[field][hash] = obj._id;
         }
       }
     }
     
     this.save = function(obj) {
       var o = Object.assign({}, obj);
+            
+      if (!_checkConstraints(o)) {
+        return false;
+      }
       
-      if (!_checkConstraints(o))
-          return false;
-      
-      if (!o._id) {
+      if (!o._id || _indexes.id[o._id] === undefined) {
+        _runTriggers('beforeCreate', o);
         o._id = CasperUtils.getId();
         var idx = _records.push(o) - 1;
         _createIndexes(o, idx);
+        _runTriggers('afterCreate', o);
         return o;
       }
 
-      // TODO we are updating a record here, we need to make sure to clean the unique indexes...
-      
-      if (!_indexes.id[o._id]) {
-        for (var i = 0; i < _records.length; ++i) {
-          if (_records[i]._id === o._id) {
-            _records[i] = o;
-            _createIndexes(o, i - 1);
-            break;
-          }
-        }
-      } else {
-        _records[_indexes.id[o._id]] = o;
-        _createIndexes(o, _indexes.id[o._id]);
-      }
-
+      _runTriggers('beforeUpdate', o);
+      _records[_indexes.id[o._id]] = o;
+      //_createIndexes(o, _indexes.id[o._id]);
+      _updateUniqueIndexes(o);
+      _runTriggers('afterUpdate', o);
       return o;
     };
     
@@ -792,19 +1010,33 @@ casper = (function () {
       return _self.save(obj);
     };
 
+    /**
+     * Removes a record from the database
+     */
     this.remove = function(obj) {
       if (!obj._id) {
         return false;
       }
 
+      _runTriggers('beforeDelete', obj);
+      
       for (var i = 0; i < _records.length; ++i) {
         if (_records[i]._id === obj._id) {
           _records.splice(i, 1);
           delete _indexes.id[obj._id];
-          // TODO delete unique indexes          
+          for (var f in _indexes.unique) {
+            for (var u in _indexes.unique[f]) {
+              if (_indexes.unique[f][u] === obj._id) {
+                delete _indexes.unique[f][u];
+                break;
+              }
+            }
+          }
           break;
         }
       }
+      
+      _runTriggers('afterDelete', obj);
     };
     
     this.findById = function(id) {

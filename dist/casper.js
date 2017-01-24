@@ -1,5 +1,17 @@
 var casper;
 (function (casper) {
+    var Mode;
+    (function (Mode) {
+        Mode[Mode["Exact"] = 0] = "Exact";
+        Mode[Mode["IgnoreCase"] = 1] = "IgnoreCase";
+        Mode[Mode["Regex"] = 2] = "Regex";
+        Mode[Mode["LessThan"] = 3] = "LessThan";
+        Mode[Mode["GreaterThan"] = 4] = "GreaterThan";
+        Mode[Mode["LessThanEqual"] = 5] = "LessThanEqual";
+        Mode[Mode["GreaterThanEqual"] = 6] = "GreaterThanEqual";
+        Mode[Mode["In"] = 7] = "In";
+        Mode[Mode["Between"] = 8] = "Between";
+    })(Mode || (Mode = {}));
     var CasperUtils = (function () {
         function CasperUtils() {
         }
@@ -51,18 +63,6 @@ var casper;
     }());
     CasperUtils.Mode = Mode;
     casper.CasperUtils = CasperUtils;
-    var Mode;
-    (function (Mode) {
-        Mode[Mode["Exact"] = 0] = "Exact";
-        Mode[Mode["IgnoreCase"] = 1] = "IgnoreCase";
-        Mode[Mode["Regex"] = 2] = "Regex";
-        Mode[Mode["LessThan"] = 3] = "LessThan";
-        Mode[Mode["GreaterThan"] = 4] = "GreaterThan";
-        Mode[Mode["LessThanEqual"] = 5] = "LessThanEqual";
-        Mode[Mode["GreaterThanEqual"] = 6] = "GreaterThanEqual";
-        Mode[Mode["In"] = 7] = "In";
-        Mode[Mode["Between"] = 8] = "Between";
-    })(Mode || (Mode = {}));
 })(casper || (casper = {}));
 var casper;
 (function (casper) {

@@ -1,4 +1,10 @@
 namespace casper {
+    enum Mode {
+        Exact, IgnoreCase, Regex,
+        LessThan, GreaterThan, LessThanEqual,
+        GreaterThanEqual, In, Between
+    }
+
     export class CasperUtils {
         private constructor() {
         }
@@ -59,11 +65,5 @@ namespace casper {
 
             return hash.toString();
         }
-    }
-
-    enum Mode {
-        Exact, IgnoreCase, Regex,
-        LessThan, GreaterThan, LessThanEqual,
-        GreaterThanEqual, In, Between
     }
 }

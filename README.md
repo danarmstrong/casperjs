@@ -1,6 +1,11 @@
 # Casper.js - a _real_ in-memory database for JavaScript
 In short, Casper.js is a JavaScript port of the Java CasperDB library with many enhancements. More specifically, Casper.js is a JavaScript in-memory database with all of the features you would expect from a database. It supports validation, indexing, intuitive SQL-style querying, triggers and stored procedures in a small and efficient library with absolutely no dependencies. Getting up and running with Casper is incredibly simple.
 
+## Getting started
+```html
+<script src="dist/casper.js"></script>
+```
+
 ## Creating a database
 ```javascript
 var db = new casper.CasperDatabase();

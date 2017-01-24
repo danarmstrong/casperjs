@@ -66,21 +66,6 @@ var casper;
 })(casper || (casper = {}));
 var casper;
 (function (casper) {
-    var QueryPart = (function () {
-        function QueryPart(command, value) {
-            this.command = command;
-            this.value = value;
-        }
-        QueryPart.prototype.getCommand = function () {
-            return this.command;
-        };
-        QueryPart.prototype.getValue = function () {
-            return this.value;
-        };
-        return QueryPart;
-    }());
-    QueryPart.Command = Command;
-    casper.QueryPart = QueryPart;
     var Command;
     (function (Command) {
         Command[Command["And"] = 0] = "And";
@@ -99,9 +84,29 @@ var casper;
         Command[Command["Not"] = 13] = "Not";
         Command[Command["Limit"] = 14] = "Limit";
     })(Command || (Command = {}));
+    var QueryPart = (function () {
+        function QueryPart(command, value) {
+            this.command = command;
+            this.value = value;
+        }
+        QueryPart.prototype.getCommand = function () {
+            return this.command;
+        };
+        QueryPart.prototype.getValue = function () {
+            return this.value;
+        };
+        return QueryPart;
+    }());
+    QueryPart.Command = Command;
+    casper.QueryPart = QueryPart;
 })(casper || (casper = {}));
 var casper;
 (function (casper) {
+    var Type;
+    (function (Type) {
+        Type[Type["Find"] = 0] = "Find";
+        Type[Type["Remove"] = 1] = "Remove";
+    })(Type || (Type = {}));
     var QueryBuilder = (function () {
         function QueryBuilder(repository, type) {
             this.repository = repository;
@@ -127,11 +132,6 @@ var casper;
     }());
     QueryBuilder.Type = Type;
     casper.QueryBuilder = QueryBuilder;
-    var Type;
-    (function (Type) {
-        Type[Type["Find"] = 0] = "Find";
-        Type[Type["Remove"] = 1] = "Remove";
-    })(Type || (Type = {}));
 })(casper || (casper = {}));
 var casper;
 (function (casper) {

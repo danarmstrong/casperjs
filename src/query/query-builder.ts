@@ -1,6 +1,10 @@
 /// <reference path="query-part.ts" />
 
 namespace casper {
+    enum Type {
+        Find, Remove
+    }
+
     export class QueryBuilder {
 
         private type: Type;
@@ -34,9 +38,5 @@ namespace casper {
         public add(command: any, value?: any): void {
             this.parts.push(new QueryPart(command, value));
         }
-    }
-
-    enum Type {
-        Find, Remove
     }
 }

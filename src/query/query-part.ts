@@ -1,4 +1,12 @@
 namespace casper {
+    enum Command {
+        And, Or, Where,
+        Eq, Ne, Lt, Le,
+        Gt, Ge, Lg, Like,
+        In, Between, Not,
+        Limit
+    }
+
     export class QueryPart {
 
         private command: Command;
@@ -18,13 +26,5 @@ namespace casper {
         public getValue(): any {
             return this.value;
         }
-    }
-
-    enum Command {
-        And, Or, Where,
-        Eq, Ne, Lt, Le,
-        Gt, Ge, Lg, Like,
-        In, Between, Not,
-        Limit
     }
 }

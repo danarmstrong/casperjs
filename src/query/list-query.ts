@@ -6,14 +6,22 @@
 namespace casper {
     export class ListQuery {
 
-        private source: any;
+        private source: any; // the array of records
+        private searchSet: any; // the array to be searched in the end
         private query: QueryBuilder;
         private max: number;
+        private indexes: any; // the indexes object to be passed from Collection
+        private indexedFields: any; // a list of the indexed fields
+
+        private liveQuery: boolean; // if we WHERE, AND, OR an indexed field, query in real-time
+        private liveQueryField: string; // the field to use during live querying
 
         private constructor(source: any) {
             this.source = source;
+            this.searchSet = [];
             this.query = new QueryBuilder();
             this.max = 0;
+            this.liveQuery = false;
         }
 
         public static from(source: any): ListQuery {
@@ -26,12 +34,45 @@ namespace casper {
 
         public reset(): ListQuery {
             this.query.reset();
+            this.searchSet = [];
             return this;
         }
 
 
         public setQuery(queryBuilder: QueryBuilder): ListQuery {
             this.query = queryBuilder;
+            return this;
+        }
+
+        public setIndexes(indexes: any) {
+            let f: string;
+            this.indexedFields = ['_id'];
+            this.indexes = indexes;
+            if (this.indexes) {
+                if (this.indexes.unique) {
+                    for (f in this.indexes.unique) {
+                        if (!this.indexes.unique.hasOwnProperty(f)) {
+                            continue;
+                        }
+
+                        if (this.indexedFields.indexOf(f) < 0) {
+                            this.indexedFields.push(f);
+                        }
+                    }
+                }
+
+                if (this.indexes.indexed) {
+                    for (f in this.indexes.indexed) {
+                        if (!this.indexes.indexed.hasOwnProperty(f)) {
+                            continue;
+                        }
+
+                        if (this.indexedFields.indexOf(f) < 0) {
+                            this.indexedFields.push(f);
+                        }
+                    }
+                }
+            }
             return this;
         }
 
@@ -82,23 +123,39 @@ namespace casper {
 
 
         public and(field: string): ListQuery {
+            this.liveQuery = false;
             this.addPart(QueryPart.Command.And, field);
+            if (this.indexedFields.indexOf(field) > 0) {
+                this.liveQuery = true;
+                this.liveQueryField = field;
+            }
             return this;
         }
 
 
         public or(field: string): ListQuery {
+            this.liveQuery = false;
             this.addPart(QueryPart.Command.Or, field);
-            return this;
-        }
-
-        public not(): ListQuery {
-            this.addPart(QueryPart.Command.Not);
+            if (this.indexedFields.indexOf(field) > 0) {
+                this.liveQuery = true;
+                this.liveQueryField = field;
+            }
             return this;
         }
 
         public where(field: string): ListQuery {
+            this.liveQuery = false;
             this.addPart(QueryPart.Command.Where, field);
+            if (this.indexedFields.indexOf(field) > 0) {
+                this.liveQuery = true;
+                this.liveQueryField = field;
+            }
+            return this;
+        }
+
+        public not(): ListQuery {
+            this.liveQuery = false;
+            this.addPart(QueryPart.Command.Not);
             return this;
         }
 
@@ -118,19 +175,22 @@ namespace casper {
 
         public exec(): any {
             let results: any = [],
-                p: any;
-            for (p in this.source) {
-                if (!this.source.hasOwnProperty(p))
-                    continue;
+                o: any;
 
-                if (this.buildQuery(p).isMatch()) {
-                    results.push(p);
+            if (this.searchSet.length === 0) {
+                this.searchSet = this.source;
+            }
+
+            for (o of this.searchSet) {
+                if (this.buildQuery(o).isMatch()) {
+                    results.push(o);
                     if (results.length === this.max)
                         break;
                 }
             }
 
             this.query.reset();
+            this.searchSet = [];
             return results;
         }
 
@@ -197,6 +257,31 @@ namespace casper {
 
         private addPart(command: any, value?: any): void {
             this.query.add(command, value);
+
+            if (this.liveQuery) {
+                let hash: string = CasperUtils.getHash(value);
+                let ids: any = [], id: string;
+                if (this.indexes.unique[this.liveQueryField]) {
+                    id = this.indexes.unique[this.liveQueryField][hash];
+                    if (id && ids.indexOf(id) < 0) {
+                        ids.push(id);
+                    }
+                }
+
+                if (this.indexes.indexed[this.liveQueryField] && this.indexes.indexed[this.liveQueryField][hash]) {
+                    for (id of this.indexes.indexed[this.liveQueryField][hash]) {
+                        if (ids.indexOf(id) < 0) {
+                            ids.push(id);
+                        }
+                    }
+                }
+
+                for (id of ids) {
+                    if (this.indexes.id[id] !== undefined) {
+                        this.searchSet.push(this.source[this.indexes.id[id]]);
+                    }
+                }
+            }
         }
     }
 }

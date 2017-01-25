@@ -466,7 +466,7 @@ namespace casper {
         }
 
         public find(): ListQuery {
-            return ListQuery.from(this.records);
+            return ListQuery.from(this.records).setIndexes(this.indexes);
         }
 
         public findOne(): ListQuery {

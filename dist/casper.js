@@ -1,3 +1,8 @@
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
 var casper;
 (function (casper) {
     var Mode;
@@ -59,9 +64,9 @@ var casper;
             }
             return hash.toString();
         };
+        CasperUtils.Mode = Mode;
         return CasperUtils;
     }());
-    CasperUtils.Mode = Mode;
     casper.CasperUtils = CasperUtils;
 })(casper || (casper = {}));
 var casper;
@@ -95,9 +100,9 @@ var casper;
         QueryPart.prototype.getValue = function () {
             return this.value;
         };
+        QueryPart.Command = Command;
         return QueryPart;
     }());
-    QueryPart.Command = Command;
     casper.QueryPart = QueryPart;
 })(casper || (casper = {}));
 var casper;
@@ -128,9 +133,9 @@ var casper;
         QueryBuilder.prototype.add = function (command, value) {
             this.parts.push(new casper.QueryPart(command, value));
         };
+        QueryBuilder.Type = Type;
         return QueryBuilder;
     }());
-    QueryBuilder.Type = Type;
     casper.QueryBuilder = QueryBuilder;
 })(casper || (casper = {}));
 var casper;
@@ -246,7 +251,7 @@ var casper;
             }
             return this.test(sb, casper.CasperUtils.Mode.Regex);
         };
-        ObjectMatcher.prototype["in"] = function (values) {
+        ObjectMatcher.prototype.in = function (values) {
             return this.test(values, casper.CasperUtils.Mode.In);
         };
         ObjectMatcher.prototype.between = function (start, end) {
@@ -287,8 +292,10 @@ var casper;
     var ListQuery = (function () {
         function ListQuery(source) {
             this.source = source;
+            this.searchSet = [];
             this.query = new casper.QueryBuilder();
             this.max = 0;
+            this.liveQuery = false;
         }
         ListQuery.from = function (source) {
             return new ListQuery(source);
@@ -298,10 +305,39 @@ var casper;
         };
         ListQuery.prototype.reset = function () {
             this.query.reset();
+            this.searchSet = [];
             return this;
         };
         ListQuery.prototype.setQuery = function (queryBuilder) {
             this.query = queryBuilder;
+            return this;
+        };
+        ListQuery.prototype.setIndexes = function (indexes) {
+            var f;
+            this.indexedFields = ['_id'];
+            this.indexes = indexes;
+            if (this.indexes) {
+                if (this.indexes.unique) {
+                    for (f in this.indexes.unique) {
+                        if (!this.indexes.unique.hasOwnProperty(f)) {
+                            continue;
+                        }
+                        if (this.indexedFields.indexOf(f) < 0) {
+                            this.indexedFields.push(f);
+                        }
+                    }
+                }
+                if (this.indexes.indexed) {
+                    for (f in this.indexes.indexed) {
+                        if (!this.indexes.indexed.hasOwnProperty(f)) {
+                            continue;
+                        }
+                        if (this.indexedFields.indexOf(f) < 0) {
+                            this.indexedFields.push(f);
+                        }
+                    }
+                }
+            }
             return this;
         };
         ListQuery.prototype.eq = function (value) {
@@ -328,7 +364,7 @@ var casper;
             this.addPart(casper.QueryPart.Command.Le, value);
             return this;
         };
-        ListQuery.prototype["in"] = function (value) {
+        ListQuery.prototype.in = function (value) {
             this.addPart(casper.QueryPart.Command.In, value);
             return this;
         };
@@ -337,19 +373,35 @@ var casper;
             return this;
         };
         ListQuery.prototype.and = function (field) {
+            this.liveQuery = false;
             this.addPart(casper.QueryPart.Command.And, field);
+            if (this.indexedFields.indexOf(field) > 0) {
+                this.liveQuery = true;
+                this.liveQueryField = field;
+            }
             return this;
         };
         ListQuery.prototype.or = function (field) {
+            this.liveQuery = false;
             this.addPart(casper.QueryPart.Command.Or, field);
-            return this;
-        };
-        ListQuery.prototype.not = function () {
-            this.addPart(casper.QueryPart.Command.Not);
+            if (this.indexedFields.indexOf(field) > 0) {
+                this.liveQuery = true;
+                this.liveQueryField = field;
+            }
             return this;
         };
         ListQuery.prototype.where = function (field) {
+            this.liveQuery = false;
             this.addPart(casper.QueryPart.Command.Where, field);
+            if (this.indexedFields.indexOf(field) > 0) {
+                this.liveQuery = true;
+                this.liveQueryField = field;
+            }
+            return this;
+        };
+        ListQuery.prototype.not = function () {
+            this.liveQuery = false;
+            this.addPart(casper.QueryPart.Command.Not);
             return this;
         };
         ListQuery.prototype.limit = function (max) {
@@ -365,17 +417,20 @@ var casper;
             }
         };
         ListQuery.prototype.exec = function () {
-            var results = [], p;
-            for (p in this.source) {
-                if (!this.source.hasOwnProperty(p))
-                    continue;
-                if (this.buildQuery(p).isMatch()) {
-                    results.push(p);
+            var results = [], o;
+            if (this.searchSet.length === 0) {
+                this.searchSet = this.source;
+            }
+            for (var _i = 0, _a = this.searchSet; _i < _a.length; _i++) {
+                o = _a[_i];
+                if (this.buildQuery(o).isMatch()) {
+                    results.push(o);
                     if (results.length === this.max)
                         break;
                 }
             }
             this.query.reset();
+            this.searchSet = [];
             return results;
         };
         ListQuery.prototype.execute = function () {
@@ -420,7 +475,7 @@ var casper;
                         q.lg(part.getValue());
                         break;
                     case casper.QueryPart.Command.In:
-                        q["in"](part.getValue());
+                        q.in(part.getValue());
                         break;
                     case casper.QueryPart.Command.Between:
                         break;
@@ -433,6 +488,30 @@ var casper;
         };
         ListQuery.prototype.addPart = function (command, value) {
             this.query.add(command, value);
+            if (this.liveQuery) {
+                var hash = casper.CasperUtils.getHash(value);
+                var ids = [], id = void 0;
+                if (this.indexes.unique[this.liveQueryField]) {
+                    id = this.indexes.unique[this.liveQueryField][hash];
+                    if (id && ids.indexOf(id) < 0) {
+                        ids.push(id);
+                    }
+                }
+                if (this.indexes.indexed[this.liveQueryField] && this.indexes.indexed[this.liveQueryField][hash]) {
+                    for (var _i = 0, _a = this.indexes.indexed[this.liveQueryField][hash]; _i < _a.length; _i++) {
+                        id = _a[_i];
+                        if (ids.indexOf(id) < 0) {
+                            ids.push(id);
+                        }
+                    }
+                }
+                for (var _b = 0, ids_1 = ids; _b < ids_1.length; _b++) {
+                    id = ids_1[_b];
+                    if (this.indexes.id[id] !== undefined) {
+                        this.searchSet.push(this.source[this.indexes.id[id]]);
+                    }
+                }
+            }
         };
         return ListQuery;
     }());
@@ -777,7 +856,7 @@ var casper;
             return this.records[this.indexes.id[id]];
         };
         Collection.prototype.find = function () {
-            return casper.ListQuery.from(this.records);
+            return casper.ListQuery.from(this.records).setIndexes(this.indexes);
         };
         Collection.prototype.findOne = function () {
             return this.find().limit(1);
@@ -814,5 +893,22 @@ var casper;
         return Database;
     }());
     casper.Database = Database;
+})(casper || (casper = {}));
+var casper;
+(function (casper) {
+    var Exception = (function (_super) {
+        __extends(Exception, _super);
+        function Exception(message) {
+            _super.call(this, message);
+            this.name = 'Exception';
+            this.message = message;
+            this.stack = (new Error()).stack;
+        }
+        Exception.prototype.getMessage = function () {
+            return this.message;
+        };
+        return Exception;
+    }(Error));
+    casper.Exception = Exception;
 })(casper || (casper = {}));
 //# sourceMappingURL=casper.js.map

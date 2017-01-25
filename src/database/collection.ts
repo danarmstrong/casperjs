@@ -220,24 +220,42 @@ namespace casper {
         private updateIndexedIndexes(obj: any): void {
             let f: any,
                 h: any,
-                hash: string;
+                hash: string,
+                idx: number;
             for (f in obj) {
-                if (!obj.hasOwnProperty(f))
+                if (!obj.hasOwnProperty(f)) {
                     continue;
+                }
+
                 if (this.indexes.indexed[f]) {
                     hash = CasperUtils.getHash(obj[f]);
                     if (this.indexes.indexed[f][hash]) {
-                        if (this.indexes.indexed[f][hash].indexOf(obj._id) > -1)
+                        if (this.indexes.indexed[f][hash].indexOf(obj._id) > -1) {
+                            // The index did not change
                             continue;
+                        }
                     }
 
                     for (h in this.indexes.indexed[f]) {
-                        if (!this.indexes.indexed[f].hasOwnProperty(h))
+                        if (!this.indexes.indexed[f].hasOwnProperty(h)) {
                             continue;
-                        if (this.indexes.indexed[f][h].indexOf(obj._id) > -1) {
-                            delete this.indexes.indexed[f][h];
+                        }
+
+                        idx = this.indexes.indexed[f][h].indexOf(obj._id);
+                        if (idx > -1) {
+                            // There is a previous index record
+                            this.indexes.indexed[f][h].splice(idx, 1);
+                            if (this.indexes.indexed[f][h].length === 0) {
+                                // The index has no more records
+                                delete this.indexes.indexed[f][h];
+                            }
                             break;
                         }
+                    }
+
+                    if (!this.indexes.indexed[f][hash]) {
+                        // This is a new index
+                        this.indexes.indexed[f][hash] = [];
                     }
                     this.indexes.indexed[f][hash].push(obj._id);
                 }

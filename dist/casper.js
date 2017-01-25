@@ -59,9 +59,9 @@ var casper;
             }
             return hash.toString();
         };
+        CasperUtils.Mode = Mode;
         return CasperUtils;
     }());
-    CasperUtils.Mode = Mode;
     casper.CasperUtils = CasperUtils;
 })(casper || (casper = {}));
 var casper;
@@ -95,9 +95,9 @@ var casper;
         QueryPart.prototype.getValue = function () {
             return this.value;
         };
+        QueryPart.Command = Command;
         return QueryPart;
     }());
-    QueryPart.Command = Command;
     casper.QueryPart = QueryPart;
 })(casper || (casper = {}));
 var casper;
@@ -128,9 +128,9 @@ var casper;
         QueryBuilder.prototype.add = function (command, value) {
             this.parts.push(new casper.QueryPart(command, value));
         };
+        QueryBuilder.Type = Type;
         return QueryBuilder;
     }());
-    QueryBuilder.Type = Type;
     casper.QueryBuilder = QueryBuilder;
 })(casper || (casper = {}));
 var casper;
@@ -246,7 +246,7 @@ var casper;
             }
             return this.test(sb, casper.CasperUtils.Mode.Regex);
         };
-        ObjectMatcher.prototype["in"] = function (values) {
+        ObjectMatcher.prototype.in = function (values) {
             return this.test(values, casper.CasperUtils.Mode.In);
         };
         ObjectMatcher.prototype.between = function (start, end) {
@@ -329,7 +329,7 @@ var casper;
             this.addPart(casper.QueryPart.Command.Le, value);
             return this;
         };
-        ListQuery.prototype["in"] = function (value) {
+        ListQuery.prototype.in = function (value) {
             this.addPart(casper.QueryPart.Command.In, value);
             return this;
         };
@@ -413,7 +413,7 @@ var casper;
                         q.lg(part.getValue());
                         break;
                     case casper.QueryPart.Command.In:
-                        q["in"](part.getValue());
+                        q.in(part.getValue());
                         break;
                     case casper.QueryPart.Command.Between:
                         break;

@@ -433,8 +433,8 @@ var casper;
 })(casper || (casper = {}));
 var casper;
 (function (casper) {
-    var CasperCollection = (function () {
-        function CasperCollection(options) {
+    var Collection = (function () {
+        function Collection(options) {
             this.records = [];
             this.initIndexes();
             this.initConstraints();
@@ -467,12 +467,13 @@ var casper;
                 }
             }
         }
-        CasperCollection.prototype.initIndexes = function () {
-            this.indexes = { id: {}, unique: {} };
+        Collection.prototype.initIndexes = function () {
+            this.indexes = { id: {}, unique: {}, indexed: {} };
         };
-        CasperCollection.prototype.initConstraints = function () {
+        Collection.prototype.initConstraints = function () {
             this.constraints = {
                 unique: [],
+                indexed: [],
                 required: [],
                 notNull: [],
                 min: {},
@@ -482,7 +483,7 @@ var casper;
                 type: {}
             };
         };
-        CasperCollection.prototype.initTriggers = function () {
+        Collection.prototype.initTriggers = function () {
             this.triggers = {
                 beforeCreate: {},
                 afterCreate: {},
@@ -492,16 +493,16 @@ var casper;
                 afterDelete: {}
             };
         };
-        CasperCollection.prototype.initProcedures = function () {
+        Collection.prototype.initProcedures = function () {
             this.procedures = {};
         };
-        CasperCollection.prototype.getIndexes = function () {
+        Collection.prototype.getIndexes = function () {
             return this.indexes;
         };
-        CasperCollection.prototype.getConstraints = function () {
+        Collection.prototype.getConstraints = function () {
             return this.constraints;
         };
-        CasperCollection.prototype.rebuildIndexes = function () {
+        Collection.prototype.rebuildIndexes = function () {
             var hash, u, i;
             this.initIndexes();
             for (i = 0; i < this.records.length; ++i) {
@@ -517,11 +518,17 @@ var casper;
             }
         };
         ;
-        CasperCollection.prototype.addConstraint = function (field, constraint) {
+        Collection.prototype.addConstraint = function (field, constraint) {
             if (constraint.unique) {
                 if (this.constraints.unique.indexOf(field) < 0) {
                     this.constraints.unique.push(field);
                     this.indexes.unique[field] = {};
+                }
+            }
+            if (constraint.indexed) {
+                if (this.constraints.indexed.indexOf(field) < 0) {
+                    this.constraints.indexed.push(field);
+                    this.indexes.indexed[field] = {};
                 }
             }
             if (constraint.required) {
@@ -550,29 +557,29 @@ var casper;
                 this.constraints.type[field] = constraint.type;
             }
         };
-        CasperCollection.prototype.addTrigger = function (event, name, fn) {
+        Collection.prototype.addTrigger = function (event, name, fn) {
             this.triggers[event][name] = fn;
         };
-        CasperCollection.prototype.dropTrigger = function (event, name) {
+        Collection.prototype.dropTrigger = function (event, name) {
             delete this.triggers[event][name];
         };
-        CasperCollection.prototype.runTriggers = function (event, source) {
+        Collection.prototype.runTriggers = function (event, source) {
             if (this.triggers[event] === undefined)
                 return;
             for (var t in this.triggers[event]) {
                 this.triggers[event][t] && this.triggers[event][t](source);
             }
         };
-        CasperCollection.prototype.addProcedure = function (name, fn) {
+        Collection.prototype.addProcedure = function (name, fn) {
             this.procedures[name] = fn;
         };
-        CasperCollection.prototype.dropProcedure = function (name) {
+        Collection.prototype.dropProcedure = function (name) {
             delete this.procedures[name];
         };
-        CasperCollection.prototype.callProcedure = function (name) {
+        Collection.prototype.callProcedure = function (name) {
             this.procedures[name] && this.procedures[name]();
         };
-        CasperCollection.prototype.updateUniqueIndexes = function (obj) {
+        Collection.prototype.updateUniqueIndexes = function (obj) {
             var f, h, hash;
             for (f in obj) {
                 if (!obj.hasOwnProperty(f))
@@ -594,7 +601,30 @@ var casper;
                 }
             }
         };
-        CasperCollection.prototype.checkConstraints = function (obj) {
+        Collection.prototype.updateIndexedIndexes = function (obj) {
+            var f, h, hash;
+            for (f in obj) {
+                if (!obj.hasOwnProperty(f))
+                    continue;
+                if (this.indexes.indexed[f]) {
+                    hash = casper.CasperUtils.getHash(obj[f]);
+                    if (this.indexes.indexed[f][hash]) {
+                        if (this.indexes.indexed[f][hash].indexOf(obj._id) > -1)
+                            continue;
+                    }
+                    for (h in this.indexes.indexed[f]) {
+                        if (!this.indexes.indexed[f].hasOwnProperty(h))
+                            continue;
+                        if (this.indexes.indexed[f][h].indexOf(obj._id) > -1) {
+                            delete this.indexes.indexed[f][h];
+                            break;
+                        }
+                    }
+                    this.indexes.indexed[f][hash].push(obj._id);
+                }
+            }
+        };
+        Collection.prototype.checkConstraints = function (obj) {
             var field, hash, v, r;
             for (field in this.constraints.defaultsTo) {
                 if (obj[field] === undefined) {
@@ -655,18 +685,27 @@ var casper;
             }
             return true;
         };
-        CasperCollection.prototype.createIndexes = function (obj, idx) {
+        Collection.prototype.createIndexes = function (obj, idx) {
             var field, hash;
             this.indexes.id[obj._id] = idx;
             for (var _i = 0, _a = this.constraints.unique; _i < _a.length; _i++) {
                 field = _a[_i];
                 if (obj[field]) {
-                    hash = typeof obj[field] === 'string' ? casper.CasperUtils.getHash(obj[field]) : obj[field];
+                    hash = typeof obj[field] === 'string' ? casper.CasperUtils.getHash(obj[field]) : obj[field].toString();
                     this.indexes.unique[field][hash] = obj._id;
                 }
             }
+            for (var _b = 0, _c = this.constraints.indexed; _b < _c.length; _b++) {
+                field = _c[_b];
+                if (obj[field]) {
+                    hash = typeof obj[field] === 'string' ? casper.CasperUtils.getHash(obj[field]) : obj[field].toString();
+                    if (this.indexes.indexed[field][hash] === undefined)
+                        this.indexes.indexed[field][hash] = [];
+                    this.indexes.indexed[field][hash].push(obj._id);
+                }
+            }
         };
-        CasperCollection.prototype.save = function (source) {
+        Collection.prototype.save = function (source) {
             var o = Object.assign({}, source);
             if (!this.checkConstraints(o)) {
                 return false;
@@ -682,10 +721,11 @@ var casper;
             this.runTriggers('beforeUpdate', o);
             this.records[this.indexes.id[o._id]] = o;
             this.updateUniqueIndexes(o);
+            this.updateIndexedIndexes(o);
             this.runTriggers('afterUpdate', o);
             return o;
         };
-        CasperCollection.prototype.remove = function (source) {
+        Collection.prototype.remove = function (source) {
             if (!source._id) {
                 return false;
             }
@@ -707,7 +747,7 @@ var casper;
             }
             this.runTriggers('afterDelete', source);
         };
-        CasperCollection.prototype.findById = function (id) {
+        Collection.prototype.findById = function (id) {
             if (!this.indexes.id[id]) {
                 for (var i = 0; i < this.records.length; ++i) {
                     if (this.records[i]._id === id) {
@@ -719,43 +759,43 @@ var casper;
             }
             return this.records[this.indexes.id[id]];
         };
-        CasperCollection.prototype.find = function () {
+        Collection.prototype.find = function () {
             return casper.ListQuery.from(this.records);
         };
-        CasperCollection.prototype.findOne = function () {
+        Collection.prototype.findOne = function () {
             return this.find().limit(1);
         };
-        CasperCollection.prototype.findAll = function () {
+        Collection.prototype.findAll = function () {
             return this.records;
         };
-        CasperCollection.prototype.count = function () {
+        Collection.prototype.count = function () {
             return this.records.length;
         };
-        return CasperCollection;
+        return Collection;
     }());
-    casper.CasperCollection = CasperCollection;
+    casper.Collection = Collection;
 })(casper || (casper = {}));
 var casper;
 (function (casper) {
-    var CasperDatabase = (function () {
-        function CasperDatabase() {
+    var Database = (function () {
+        function Database() {
             this.database = {};
         }
-        CasperDatabase.prototype.createCollection = function (name, options) {
+        Database.prototype.createCollection = function (name, options) {
             if (!this.database[name] && !this[name]) {
-                this.database[name] = new casper.CasperCollection(options);
+                this.database[name] = new casper.Collection(options);
                 this[name] = this.database[name];
             }
         };
-        CasperDatabase.prototype.getCollection = function (name) {
+        Database.prototype.getCollection = function (name) {
             return this.database[name];
         };
-        CasperDatabase.prototype.dropCollection = function (name) {
+        Database.prototype.dropCollection = function (name) {
             if (this.database[name])
                 delete this.database[name];
         };
-        return CasperDatabase;
+        return Database;
     }());
-    casper.CasperDatabase = CasperDatabase;
+    casper.Database = Database;
 })(casper || (casper = {}));
 //# sourceMappingURL=casper.js.map

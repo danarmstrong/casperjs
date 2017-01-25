@@ -1,7 +1,7 @@
-/// <reference path="casper-collection.ts" />
+/// <reference path="collection.ts" />
 
 namespace casper {
-    export class CasperDatabase {
+    export class Database {
         private database: any;
         [key: string]: any;
 
@@ -11,12 +11,12 @@ namespace casper {
 
         public createCollection(name: string, options: any): void {
             if (!this.database[name] && !this[name]) {
-                this.database[name] = new CasperCollection(options);
+                this.database[name] = new Collection(options);
                 this[name] = this.database[name];
             }
         }
 
-        public getCollection(name: string): CasperCollection {
+        public getCollection(name: string): Collection {
             return this.database[name];
         }
 

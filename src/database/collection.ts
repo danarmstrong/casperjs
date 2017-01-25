@@ -2,7 +2,7 @@
 /// <reference path="../query/list-query.ts" />
 
 namespace casper {
-    export class CasperCollection {
+    export class Collection {
 
         private records: any;
         private indexes: any;
@@ -48,12 +48,13 @@ namespace casper {
         }
 
         private initIndexes(): void {
-            this.indexes = {id: {}, unique: {}};
+            this.indexes = {id: {}, unique: {}, indexed: {}};
         }
 
         private initConstraints(): void {
             this.constraints = {
                 unique: [],
+                indexed: [],
                 required: [],
                 notNull: [],
                 min: {},
@@ -110,6 +111,13 @@ namespace casper {
                 if (this.constraints.unique.indexOf(field) < 0) {
                     this.constraints.unique.push(field);
                     this.indexes.unique[field] = {};
+                }
+            }
+
+            if (constraint.indexed) {
+                if (this.constraints.indexed.indexOf(field) < 0) {
+                    this.constraints.indexed.push(field);
+                    this.indexes.indexed[field] = {};
                 }
             }
 
@@ -174,6 +182,10 @@ namespace casper {
             this.procedures[name] && this.procedures[name]();
         }
 
+        /**
+         * Updates the unique indexes when a record is updated
+         * @param obj - The object to update indexes for
+         */
         private updateUniqueIndexes(obj: any): void {
             let f: any,
                 h: any,
@@ -201,6 +213,42 @@ namespace casper {
             }
         }
 
+        /**
+         * Updates the indexed indexes when a record is updated
+         * @param obj - The object to update indexes for
+         */
+        private updateIndexedIndexes(obj: any): void {
+            let f: any,
+                h: any,
+                hash: string;
+            for (f in obj) {
+                if (!obj.hasOwnProperty(f))
+                    continue;
+                if (this.indexes.indexed[f]) {
+                    hash = CasperUtils.getHash(obj[f]);
+                    if (this.indexes.indexed[f][hash]) {
+                        if (this.indexes.indexed[f][hash].indexOf(obj._id) > -1)
+                            continue;
+                    }
+
+                    for (h in this.indexes.indexed[f]) {
+                        if (!this.indexes.indexed[f].hasOwnProperty(h))
+                            continue;
+                        if (this.indexes.indexed[f][h].indexOf(obj._id) > -1) {
+                            delete this.indexes.indexed[f][h];
+                            break;
+                        }
+                    }
+                    this.indexes.indexed[f][hash].push(obj._id);
+                }
+            }
+        }
+
+        /**
+         * Checks the object against all of the constraints in the collection
+         * @param obj - The object to check
+         * @returns {boolean} - true if the constraints pass
+         */
         private checkConstraints(obj: any): boolean {
             let field: string,
                 hash: string,
@@ -300,6 +348,11 @@ namespace casper {
             return true;
         }
 
+        /**
+         * Creates index records
+         * @param obj - The object being created or updated
+         * @param idx - The array index of the object
+         */
         private createIndexes(obj: any, idx: number): void {
             let field: string,
                 hash: string;
@@ -307,13 +360,27 @@ namespace casper {
             this.indexes.id[obj._id] = idx;
             for (field of this.constraints.unique) {
                 if (obj[field]) {
-                    hash = typeof obj[field] === 'string' ? CasperUtils.getHash(obj[field]) : obj[field];
+                    hash = typeof obj[field] === 'string' ? CasperUtils.getHash(obj[field]) : obj[field].toString();
                     this.indexes.unique[field][hash] = obj._id;
+                }
+            }
+
+            for (field of this.constraints.indexed) {
+                if (obj[field]) {
+                    hash = typeof obj[field] === 'string' ? CasperUtils.getHash(obj[field]) : obj[field].toString();
+                    if (this.indexes.indexed[field][hash] === undefined)
+                        this.indexes.indexed[field][hash] = [];
+                    this.indexes.indexed[field][hash].push(obj._id);
                 }
             }
         }
 
-        public save(source: any) {
+        /**
+         * Creates or updates a record in the collection
+         * @param source - The object to be created or updateded
+         * @returns {any} - The object after the save
+         */
+        public save(source: any): any {
             let o = (<any>Object).assign({}, source);
 
             if (!this.checkConstraints(o)) {
@@ -331,8 +398,8 @@ namespace casper {
 
             this.runTriggers('beforeUpdate', o);
             this.records[this.indexes.id[o._id]] = o;
-            //_createIndexes(o, this.indexes.id[o._id]);
             this.updateUniqueIndexes(o);
+            this.updateIndexedIndexes(o);
             this.runTriggers('afterUpdate', o);
             return o;
         }

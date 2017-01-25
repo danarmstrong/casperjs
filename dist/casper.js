@@ -295,6 +295,7 @@ var casper;
             this.searchSet = [];
             this.query = new casper.QueryBuilder();
             this.max = 0;
+            this.indexedFields = [];
             this.liveQuery = false;
         }
         ListQuery.from = function (source) {

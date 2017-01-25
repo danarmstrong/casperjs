@@ -21,6 +21,7 @@ namespace casper {
             this.searchSet = [];
             this.query = new QueryBuilder();
             this.max = 0;
+            this.indexedFields = [];
             this.liveQuery = false;
         }
 

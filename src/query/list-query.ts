@@ -27,7 +27,7 @@ namespace casper {
         public reset(): ListQuery {
             this.query.reset();
             return this;
-        };
+        }
 
 
         public setQuery(queryBuilder: QueryBuilder): ListQuery {
@@ -105,6 +105,15 @@ namespace casper {
         public limit(max: number): ListQuery {
             this.max = max;
             return this;
+        }
+
+        public orderBy(field: string, direction: string) {
+            switch (direction) {
+                case 'desc':
+                    break;
+                case 'asc':
+                    break;
+            }
         }
 
         public exec(): any {

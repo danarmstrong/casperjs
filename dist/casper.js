@@ -300,7 +300,6 @@ var casper;
             this.query.reset();
             return this;
         };
-        ;
         ListQuery.prototype.setQuery = function (queryBuilder) {
             this.query = queryBuilder;
             return this;
@@ -356,6 +355,14 @@ var casper;
         ListQuery.prototype.limit = function (max) {
             this.max = max;
             return this;
+        };
+        ListQuery.prototype.orderBy = function (field, direction) {
+            switch (direction) {
+                case 'desc':
+                    break;
+                case 'asc':
+                    break;
+            }
         };
         ListQuery.prototype.exec = function () {
             var results = [], p;

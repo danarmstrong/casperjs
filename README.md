@@ -8,7 +8,7 @@ In short, Casper.js is a JavaScript port of the Java CasperDB library with many 
 
 ## Creating a database
 ```javascript
-var db = new casper.CasperDatabase();
+var db = new casper.Database();
 ```
 
 ## Creating collections
